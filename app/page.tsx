@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const EMOJIS = ["✨", "💖", "🌟", "💫", "🦄", "🌈", "💎", "🔥", "⭐", "🎀", "💗", "🪩"];
+const EMOJIS = ["✨", "🌟", "💫", "🦄", "🌈", "💎", "🔥", "⭐", "🪩", "🎉", "🤘", "😎"];
 
 interface Particle {
   id: number;
@@ -26,9 +26,52 @@ function generateParticles(count: number): Particle[] {
   }));
 }
 
+function useFlippingClock() {
+  const [showBelgium, setShowBelgium] = useState(false);
+  const [timeText, setTimeText] = useState("");
+
+  useEffect(() => {
+    function update() {
+      const now = new Date();
+      if (!showBelgium) {
+        const formatted = now.toLocaleString("en-US", {
+          timeZone: "America/Los_Angeles",
+          weekday: "long",
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        });
+        setTimeText(`${formatted} — Palo Alto, CA`);
+      } else {
+        const formatted = now.toLocaleString("nl-BE", {
+          timeZone: "Europe/Brussels",
+          weekday: "long",
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+        setTimeText(`${formatted} — België`);
+      }
+    }
+    update();
+    const tick = setInterval(update, 1000);
+    return () => clearInterval(tick);
+  }, [showBelgium]);
+
+  useEffect(() => {
+    const flip = setInterval(() => setShowBelgium((b) => !b), 5000);
+    return () => clearInterval(flip);
+  }, []);
+
+  return { timeText, showBelgium };
+}
+
 export default function Home() {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [mounted, setMounted] = useState(false);
+  const { timeText, showBelgium } = useFlippingClock();
 
   useEffect(() => {
     setParticles(generateParticles(35));
@@ -70,8 +113,8 @@ export default function Home() {
             <span className="name-word">Rani</span>
           </h1>
           <div className="divider" />
-          <p className="from-text">
-            with love from <span className="bart-name">Bart</span> 💖
+          <p className="from-text" key={showBelgium ? "be" : "us"}>
+            {timeText}
           </p>
         </div>
       </div>

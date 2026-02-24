@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Hello Rani!",
-  description: "A special greeting from Bart",
+  description: "hey hey hey",
+  metadataBase: new URL("https://unhinged.fyi"),
 };
 
 export default function RootLayout({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 const EMOJIS = ["✨", "🌟", "💫", "🦄", "🌈", "💎", "🔥", "⭐", "🪩", "🎉", "🤘", "😎"];
 
@@ -13,6 +13,17 @@ interface Particle {
   size: number;
   drift: number;
 }
+
+interface ConfettiBit {
+  id: number;
+  x: number;
+  y: number;
+  color: string;
+  dx: number;
+  dy: number;
+}
+
+const CONFETTI_COLORS = ["#ff1493", "#ff69b4", "#ffd700", "#00ffff", "#ff6ec7", "#fff", "#ff007f", "#7fff00"];
 
 function generateParticles(count: number): Particle[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -68,15 +79,64 @@ function useFlippingClock() {
   return { timeText, showBelgium };
 }
 
+let confettiIdCounter = 0;
+
 export default function Home() {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [collected, setCollected] = useState<Set<string>>(new Set());
+  const [poppedIds, setPoppedIds] = useState<Set<number>>(new Set());
+  const [confetti, setConfetti] = useState<ConfettiBit[]>([]);
+  const [newlyCollected, setNewlyCollected] = useState<string | null>(null);
   const { timeText, showBelgium } = useFlippingClock();
 
   useEffect(() => {
     setParticles(generateParticles(35));
     requestAnimationFrame(() => setMounted(true));
   }, []);
+
+  const handleParticleClick = useCallback((p: Particle, e: React.MouseEvent) => {
+    if (poppedIds.has(p.id)) return;
+
+    // Mark as popped
+    setPoppedIds((prev) => new Set(prev).add(p.id));
+
+    // Spawn confetti at click point
+    const bits: ConfettiBit[] = Array.from({ length: 12 }, (_, i) => {
+      const angle = ((360 / 12) * i + Math.random() * 30) * (Math.PI / 180);
+      const distance = 40 + Math.random() * 60;
+      return {
+        id: confettiIdCounter++,
+        x: e.clientX,
+        y: e.clientY,
+        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        dx: Math.cos(angle) * distance,
+        dy: Math.sin(angle) * distance,
+      };
+    });
+    setConfetti((prev) => [...prev, ...bits]);
+
+    // After animation, collect and remove
+    setTimeout(() => {
+      setCollected((prev) => new Set(prev).add(p.emoji));
+      setNewlyCollected(p.emoji);
+      setTimeout(() => setNewlyCollected(null), 600);
+      setParticles((prev) => prev.filter((pp) => pp.id !== p.id));
+      setPoppedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(p.id);
+        return next;
+      });
+    }, 450);
+
+    // Clean up confetti
+    setTimeout(() => {
+      const bitIds = new Set(bits.map((b) => b.id));
+      setConfetti((prev) => prev.filter((c) => !bitIds.has(c.id)));
+    }, 800);
+  }, [poppedIds]);
+
+  const allCollected = collected.size === EMOJIS.length;
 
   return (
     <div className="scene">
@@ -90,7 +150,8 @@ export default function Home() {
       {particles.map((p) => (
         <div
           key={p.id}
-          className="particle"
+          className={`particle ${poppedIds.has(p.id) ? "particle-popped" : ""}`}
+          onClick={(e) => handleParticleClick(p, e)}
           style={{
             left: `${p.left}%`,
             animationDuration: `${p.animDuration}s`,
@@ -101,6 +162,21 @@ export default function Home() {
         >
           {p.emoji}
         </div>
+      ))}
+
+      {/* Confetti bursts */}
+      {confetti.map((c) => (
+        <div
+          key={c.id}
+          className="confetti-bit"
+          style={{
+            left: c.x,
+            top: c.y,
+            background: c.color,
+            ["--dx" as string]: `${c.dx}px`,
+            ["--dy" as string]: `${c.dy}px`,
+          }}
+        />
       ))}
 
       {/* Main content */}
@@ -116,6 +192,26 @@ export default function Home() {
           <p className="from-text" key={showBelgium ? "be" : "us"}>
             {timeText}
           </p>
+
+          {/* Collection tray */}
+          <div className="collection-tray">
+            <div className="collection-slots">
+              {EMOJIS.map((emoji) => (
+                <div
+                  key={emoji}
+                  className={`collection-slot ${collected.has(emoji) ? "slot-filled" : ""} ${newlyCollected === emoji ? "slot-pop" : ""}`}
+                >
+                  <span className="slot-emoji">{emoji}</span>
+                </div>
+              ))}
+            </div>
+            <p className="collection-count">
+              {collected.size} / {EMOJIS.length}
+            </p>
+            {allCollected && (
+              <p className="collection-complete">you caught them all! ✨</p>
+            )}
+          </div>
         </div>
       </div>
 

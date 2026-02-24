@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 const EMOJIS = ["✨", "🌟", "💫", "🦄", "🌈", "💎", "🔥", "⭐", "🪩", "🎉", "🤘", "😎"];
 
@@ -81,6 +81,74 @@ function useFlippingClock() {
 
 let confettiIdCounter = 0;
 
+function useSoundEffects() {
+  const ctxRef = useRef<AudioContext | null>(null);
+  const collectCountRef = useRef(0);
+
+  const getCtx = useCallback(() => {
+    if (!ctxRef.current) {
+      ctxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    }
+    const ctx = ctxRef.current;
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }, []);
+
+  const playPop = useCallback(() => {
+    const ctx = getCtx();
+    const now = ctx.currentTime;
+
+    // Rising pitch based on how many collected — gets more exciting
+    const baseFreq = 600 + collectCountRef.current * 80;
+    collectCountRef.current++;
+
+    // Main pop tone
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.8, now + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, now + 0.25);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.25);
+
+    // Sparkle overtone
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(baseFreq * 2.5, now + 0.03);
+    osc2.frequency.exponentialRampToValueAtTime(baseFreq * 3.5, now + 0.12);
+    gain2.gain.setValueAtTime(0.12, now + 0.03);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc2.connect(gain2).connect(ctx.destination);
+    osc2.start(now + 0.03);
+    osc2.stop(now + 0.15);
+  }, [getCtx]);
+
+  const playVictory = useCallback(() => {
+    const ctx = getCtx();
+    const now = ctx.currentTime;
+    const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      const t = now + i * 0.15;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    });
+  }, [getCtx]);
+
+  return { playPop, playVictory };
+}
+
 export default function Home() {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -89,6 +157,7 @@ export default function Home() {
   const [confetti, setConfetti] = useState<ConfettiBit[]>([]);
   const [newlyCollected, setNewlyCollected] = useState<string | null>(null);
   const { timeText, showBelgium } = useFlippingClock();
+  const { playPop, playVictory } = useSoundEffects();
 
   useEffect(() => {
     setParticles(generateParticles(35));
@@ -97,6 +166,9 @@ export default function Home() {
 
   const handleParticleClick = useCallback((p: Particle, e: React.MouseEvent) => {
     if (poppedIds.has(p.id)) return;
+
+    // Play pop sound immediately on tap
+    playPop();
 
     // Mark as popped
     setPoppedIds((prev) => new Set(prev).add(p.id));
@@ -118,7 +190,13 @@ export default function Home() {
 
     // After animation, collect and remove
     setTimeout(() => {
-      setCollected((prev) => new Set(prev).add(p.emoji));
+      setCollected((prev) => {
+        const next = new Set(prev).add(p.emoji);
+        if (next.size === EMOJIS.length && prev.size !== EMOJIS.length) {
+          setTimeout(() => playVictory(), 100);
+        }
+        return next;
+      });
       setNewlyCollected(p.emoji);
       setTimeout(() => setNewlyCollected(null), 600);
       setParticles((prev) => prev.filter((pp) => pp.id !== p.id));
@@ -134,7 +212,7 @@ export default function Home() {
       const bitIds = new Set(bits.map((b) => b.id));
       setConfetti((prev) => prev.filter((c) => !bitIds.has(c.id)));
     }, 800);
-  }, [poppedIds]);
+  }, [poppedIds, playPop, playVictory]);
 
   const allCollected = collected.size === EMOJIS.length;
 

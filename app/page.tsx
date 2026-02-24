@@ -23,6 +23,45 @@ interface ConfettiBit {
   dy: number;
 }
 
+interface CheckIn {
+  id: string;
+  timestamp: number;
+  message: string;
+}
+
+const FORTUNE_MESSAGES = [
+  "You're doing amazing sweetie ✨",
+  "The universe just winked at you",
+  "Main character energy detected",
+  "Your vibe is immaculate today",
+  "Someone is thinking about you rn",
+  "Plot twist: you're the plot twist",
+  "Slay mode: activated",
+  "The stars literally aligned for this moment",
+  "You radiate unhinged joy",
+  "Certified iconic behavior",
+  "Today's forecast: 100% that person",
+  "You just leveled up (trust)",
+  "Chaos but make it cute",
+  "You're someone's reason to smile today",
+  "Manifesting big things for you rn",
+  "Je bent een zonnestraaltje ☀️",
+  "De sterren staan in jouw voordeel",
+  "Vandaag wordt een topdag, trust",
+  "Je uitstraling is *chef's kiss*",
+  "Iemand denkt nu aan jou 💭",
+  "Gekke dansen in de keuken energy",
+  "Je bent letterlijk magic",
+  "Knuffel van het universum incoming",
+  "Alles komt goed shat",
+  "Je glow-up is niet te stoppen",
+  "Wafels verdien je elke dag",
+  "Het universum zegt: jij bent top",
+  "Chaotisch maar op een cute manier",
+  "Je bent iemands favoriete mens",
+  "Groot geluk in kleine momentjes 🌸",
+];
+
 const CONFETTI_COLORS = ["#ff1493", "#ff69b4", "#ffd700", "#00ffff", "#ff6ec7", "#fff", "#ff007f", "#7fff00"];
 
 function generateParticles(count: number): Particle[] {
@@ -146,7 +185,36 @@ function useSoundEffects() {
     });
   }, [getCtx]);
 
-  return { playPop, playVictory };
+  const playCheckIn = useCallback(() => {
+    const ctx = getCtx();
+    const now = ctx.currentTime;
+
+    // Warm chime — two gentle tones
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(880, now);
+    osc1.frequency.exponentialRampToValueAtTime(1100, now + 0.15);
+    gain1.gain.setValueAtTime(0.2, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc1.connect(gain1).connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.4);
+
+    // Soft harmonic
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(1320, now + 0.1);
+    osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.3);
+    gain2.gain.setValueAtTime(0.1, now + 0.1);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc2.connect(gain2).connect(ctx.destination);
+    osc2.start(now + 0.1);
+    osc2.stop(now + 0.5);
+  }, [getCtx]);
+
+  return { playPop, playVictory, playCheckIn };
 }
 
 export default function Home() {
@@ -156,12 +224,19 @@ export default function Home() {
   const [poppedIds, setPoppedIds] = useState<Set<number>>(new Set());
   const [confetti, setConfetti] = useState<ConfettiBit[]>([]);
   const [newlyCollected, setNewlyCollected] = useState<string | null>(null);
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [showLog, setShowLog] = useState(false);
+  const [bouncing, setBouncing] = useState(false);
   const { timeText, showBelgium } = useFlippingClock();
-  const { playPop, playVictory } = useSoundEffects();
+  const { playPop, playVictory, playCheckIn } = useSoundEffects();
 
   useEffect(() => {
     setParticles(generateParticles(35));
     requestAnimationFrame(() => setMounted(true));
+    try {
+      const stored = localStorage.getItem("unhinged-checkins");
+      if (stored) setCheckIns(JSON.parse(stored));
+    } catch {}
   }, []);
 
   const handleParticleClick = useCallback((p: Particle, e: React.MouseEvent) => {
@@ -213,6 +288,44 @@ export default function Home() {
       setConfetti((prev) => prev.filter((c) => !bitIds.has(c.id)));
     }, 800);
   }, [poppedIds, playPop, playVictory]);
+
+  const handleCheckIn = useCallback(() => {
+    // If log is showing, just collapse it
+    if (showLog) {
+      setShowLog(false);
+      return;
+    }
+
+    // Otherwise, check in and show log
+    playCheckIn();
+    setBouncing(true);
+    setTimeout(() => setBouncing(false), 500);
+
+    const lastMsg = checkIns.length > 0 ? checkIns[0].message : "";
+    let msg: string;
+    do {
+      msg = FORTUNE_MESSAGES[Math.floor(Math.random() * FORTUNE_MESSAGES.length)];
+    } while (msg === lastMsg && FORTUNE_MESSAGES.length > 1);
+
+    const entry: CheckIn = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      message: msg,
+    };
+    const updated = [entry, ...checkIns];
+    setCheckIns(updated);
+    setShowLog(true);
+    try {
+      localStorage.setItem("unhinged-checkins", JSON.stringify(updated));
+    } catch {}
+  }, [checkIns, showLog, playCheckIn]);
+
+  function formatCheckInTime(ts: number): string {
+    const d = new Date(ts);
+    const day = d.toLocaleDateString("nl-BE", { timeZone: "Europe/Brussels", day: "numeric", month: "numeric" });
+    const time = d.toLocaleTimeString("nl-BE", { timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${day} ${time}`;
+  }
 
   const allCollected = collected.size === EMOJIS.length;
 
@@ -288,6 +401,33 @@ export default function Home() {
             </p>
             {allCollected && (
               <p className="collection-complete">you caught them all! ✨</p>
+            )}
+          </div>
+
+          {/* Check-in section */}
+          <div className="checkin-section">
+            <button
+              className={`checkin-button ${bouncing ? "checkin-bounce" : ""}`}
+              onClick={handleCheckIn}
+            >
+              🫶
+            </button>
+
+            {checkIns.length > 0 && showLog && (
+                  <div className="checkin-log">
+                    {checkIns.map((entry, i) => (
+                      <div
+                        key={entry.id}
+                        className="checkin-entry"
+                        style={{ animationDelay: `${i * 0.04}s` }}
+                      >
+                        <span className="checkin-time">
+                          {formatCheckInTime(entry.timestamp)}
+                        </span>
+                        <span className="checkin-message">{entry.message}</span>
+                      </div>
+                    ))}
+                  </div>
             )}
           </div>
         </div>

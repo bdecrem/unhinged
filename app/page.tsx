@@ -8,7 +8,7 @@ export default function Home() {
       alignItems: "center",
     }}>
       <h1 style={{ fontSize: "4rem", color: "white" }}>
-        Hello, rani! 👋 -bart
+        Hello, rani! 👋🔥 -bart
       </h1>
     </div>
   );

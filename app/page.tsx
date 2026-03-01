@@ -4,8 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 const features = [
-  "make lists",
-  "make playlists",
+  "be in touch but out of reach",
+  "rate his audacity",
+  "start over, better",
+  "find your girls",
+  "level the f*ck up",
+  "let go of rats dragging you down",
   "decenter men",
   "track your glow up",
   "set your intentions",
@@ -13,7 +17,7 @@ const features = [
   "manifest your next chapter",
   "rate your situationships",
   "share your era",
-  "be in touch but out of reach",
+  "make lists",
 ];
 
 function FeatureTicker() {
